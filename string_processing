@@ -1,0 +1,260 @@
+library(stringr)
+#any string is a regex
+
+library(dslabs)
+data("reported_heights")
+
+yes <- c("180cm", "70 inches")
+no <- c("180","70''")
+s <- c(yes,no)
+
+#detect cm or inches in s
+str_detect(s, "cm") | str_detect(s, "inches")
+
+#using regex
+str_detect(s, "cm|inches")
+
+#detect strings with digits
+yes <- c("5","6","5'10","5 feet","4'11")
+no <- c("",".","Five","six")
+s <- c(yes,no)
+pattern <- "\\d"
+str_detect(s,pattern)
+
+#str_view shows first match of each string
+str_view(s,pattern)
+
+#str_view_all shows all the matches
+
+#character classes
+str_view(s, "[56]")
+
+#range [0-9], \\d
+yes <- as.character(4:7)
+no <- as.character(1:3)
+s <- c(yes,no)
+str_detect(s, "[4-7]")
+
+#in regex there are no numbers, all are numbers
+#[1-20] means 0,1,2 in characters
+#digits although character follow numeric order
+#[A-Z], [a-z], all letters [a-zA-Z]
+#^is beginning of string, $ is end of string
+#^\\d$ : start of the string followed by 1 digit followed by the end
+
+pattern <- "^\\d$"
+yes <- c("1","5","9")
+no <- c("12","123"," 1","o4","b")
+s <- c(yes,no)
+str_view(s,pattern)
+
+#quantifiers
+#\\d{1,2} find numbers that are two digits or one digit
+pattern <- "^\\d{1,2}$"
+yes <- c("1","5","9","12")
+no <- c("123","o4","b")
+s <- c(yes,no)
+str_view(s,pattern)
+
+#feet and inches pattern
+# feet: '
+# inches: "
+#detect x feet y inches
+pattern <- "^[4-7]'\\d{1,2}\"$"
+yes <- c("5'7\"","6'2\"", "5'12\"")
+no <- c("6,2\"","6.2\"","I am 5'11\"", "3'2\"", "64")
+str_detect(yes,pattern)
+str_detect(no,pattern)
+
+pattern <- "^[4-7]'\\d{1,2}\"$"
+problems <- reported_heights$height
+sum(str_detect(problems, pattern))
+
+head(problems,90) %>% str_view(pattern)
+
+#different ways data is filled in
+str_subset(problems,"inches")
+str_subset(problems, "''")
+
+#use ' for feet and nothing for inches i.e. x'y x feet and y inches
+pattern <- "^[4-7]'\\d{1,2}$"
+problems %>% 
+str_replace("feet|ft|foot","'") %>%
+str_replace("inches|in|''|\"","") %>%
+str_detect(pattern) %>%
+sum
+#48, ie many more matches
+
+identical("Hi","Hi ")
+
+#\s to denote a space
+pattern_2 <- "^[4-7]'\\s\\d{1,2}\"$"
+str_subset(problems,pattern_2)
+
+#add quantifiers to permit data having spaces but not to require them
+#use * which mean zero or more instances of the specific instances of the character
+yes <- c("AB","A1B","A11B","A111B","A1111B")
+no <- c("A2B","A21B")
+str_detect(yes,"A1*B")
+str_detect(no,"A1*B")
+
+# ? for none or once
+# + for one or more
+data.frame(string=c("AB","A1B","A11B","A111B","A1111B"),
+none_or_more = str_detect(yes,"A1*B"),
+none_or_once = str_detect(yes,"A1?B"),
+one_or_more = str_detect(yes,"A1+B"))
+
+pattern <- "^[4-7]\\s*'\\s*\\d{1,2}$"
+problems %>%
+str_replace("feet|ft|foot","'") %>% #replace feet,ft,foot with '
+str_replace("inches|in|''|\"","") %>% #remove all inches symbols
+str_detect(pattern) %>%
+sum
+
+#str_replace_all remove all specific character, but risky
+#turn "x y" into a "xy"
+
+
+
+#groups
+#defined by parentheses
+#dont affect pattern matching
+
+pattern_without_groups <- "^[4-7],\\d*$"
+pattern_with_groups <- "(^[4-7]),(\\d*)$"
+yes <- c("5,9","5,11","6,","6,1")
+no <- c("5'9",",","2,8","6.1.1")
+s <- c(yes,no)
+str_detect(s,pattern_without_groups)
+str_detect(s,pattern_with_groups)
+str_match(s,pattern_with_groups)
+str_extract(s,pattern_with_groups)
+str_replace(s,pattern_with_groups, "\\1'\\2")
+
+
+pattern_with_groups <- "^(4-7])\\s*[,\\.\\s+]\\s*(\\d*)$"
+
+str_subset(problems,pattern_with_groups) %>% head
+
+#search and replace
+
+str_subset(problems,pattern_with_groups) %>% str_replace(pattern_with_groups,"\\1'\\2") %>% head
+
+#testing and improving
+not_inches_or_cm <- function(x,smallest=50,tallest=84){
+inches <- suppressWarnings(as.numeric(x))
+ind <- !is.na(inches) &
+	((inches >= smallest & inches <= tallest) |
+		(inches/2.54 >= smallest & inches/2.54 <= tallest))
+!ind
+}
+
+problems <- reported_heights %>%
+filter(not_inches_or_cm(height)) %>%
+.$height
+
+length(problems)
+
+#pattern detection
+converted <- problems %>%
+str_replace("feet|foot|ft", "'") %>% #convert feet symbols to '
+str_replace("inches|in|''|\"", "") %>% #remove inches symbols
+str_replace("^([4-7])\\s*[,\\.\\s+]\\s*(\\d*)$", "\\1'\\2") ##change format
+
+pattern <- "^[4-7]\\s*'\\s*\\d{1,2}$"
+index <- str_detect(converted, pattern)
+mean(index)
+
+#examine remaining characters
+converted[!index]
+
+#separate with regex
+s <- c("5'10","6'1")
+tab <- data.frame(x=s)
+tab %>% separate(x,c("feet","inches"),sep="'")
+
+#equivalent to separate
+tab %>% extract(x,c("feet","inches"),regex="(\\d)'(\\d{1,2})")
+
+s <- c("5'10","6'1\"","5'8inches")
+tab <- data.frame(x=s)
+tab %>% separate(x, c("feet","inches"), sep = "'", fill = "right")
+
+tab %>% extract(x, c("feet","inches"), regex = "(\\d)'(\\d{1,2})")
+
+#string splitting
+filename <- system.file("extdata/murders.csv", package = "dslabs")
+lines <- readLines(filename)
+lines %>% head()
+
+x <- str_split(lines,",")
+x %>% head()
+
+#separate the column names in the first row
+col_names <- x[[1]]
+x <- x[-1]
+
+install.packages("purr", repos="http://cran.us.r-project.org")
+library(purr)
+map(x, function(y) y[1]) %>% head()
+map(x,1) %>% head()
+
+#create dataframe
+dat <- data.frame(map_chr(x,1),
+map_chr(x,2),
+map_chr(x,3),
+map_chr(x,4),
+map_chr(x,5)) %>%
+#mutate_all(parse_guess) %>%
+setNames(col_names)
+
+dat %>% head
+
+dat <- x %>%
+transpose() %>%
+map(~parse_guess(unlist(.))) %>%
+setNames(col_names) %>%
+as.data.frame()
+
+#simpliy is true for function str_split to return a matrix instead of a list
+x <- str_split(lines,",",simplify=TRUE)
+col_names <- x[1,]
+x <- x[-1,]
+x %>% as.data.frame() %>%
+setNames(col_names) #%>%
+#mutate_all(parse_guess)
+
+#recoding
+library(dslabs)
+data("gapminder")
+
+#time series plot
+gapminder %>% 
+filter(region == "Caribbean") %>%
+ggplot(aes(year,life_expectancy, color = country)) +
+geom_line()
+
+gapminder %>% 
+filter(region == "Caribbean") %>%
+filter(str_length(country) >= 12) %>% #names longer than 12 characters
+distinct(country)
+
+library(car)
+library(tidyr)
+library(dplyr)
+
+
+gapminder %>% filter(region == "Caribbean") %>%
+mutate(country = dplyr::recode(country,
+'Antigua and Barbuda' = "Barbuda",
+'Dominican Republic' = "DR",
+'St. Vincent and the Grenadines' = "St. Vincent",
+'Trinidad and Tobago' = "Trinidad")) %>%
+ggplot(aes(year, life_expectancy, color = country)) +
+geom_line()
+
+#recode_factor
+#fct_recoder
+
+/
